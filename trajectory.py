@@ -5,6 +5,7 @@ from pyproj import CRS
 from pyproj import Transformer
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
+from tkinter.filedialog import askopenfilenames
 
 
 def open_file(filetype, title):
@@ -12,6 +13,13 @@ def open_file(filetype, title):
     root.withdraw()
     filename = askopenfilename(filetypes=filetype, title=title)
     return filename
+
+
+def open_files(filetype, title):
+    root = Tk()
+    root.withdraw()
+    filenames = askopenfilenames(filetypes=filetype, title=title)
+    return filenames
 
 
 def stats(df):
@@ -112,80 +120,49 @@ def leverArm(df):
     df["Z"] = df["Z"] - df["leverD"] / 1000
     return df
 
-
 if __name__ == "__main__":
 
-    print("Select the rtklib '.pos' file\n")
-    rtklib_file = open_file(
+    print("Select the rtklib '.pos' file(s)\n")
+    rtklib_files = open_files(
         (("pos files", "*.pos"), ("All files", "*.*")), "rtklib pos file"
     )
-    print("Select the orientation '.txt' file containing rotation values\n")
-    orient_file = open_file(
+    
+    print("Select the inclination '.txt' file(s) containing camera rotation values\n")
+    orient_files = open_files(
         (("txt files", "*.txt"), ("All files", "*.*")), "Rotation file"
     )
-    print("Select the image timestamp '.MRK' file\n")
-    time_file = open_file(
+
+    # Check we recieved a matching number of files
+    if len(rtklib_files) != len(orient_files):
+        raise ValueError(
+                'incorrect number of files given, you must enter matching .pos and inclination .txt files')
+
+    print("Select the image timestamp '.MRK' file(s)\n")
+    time_files = open_files(
         (("MRK files", "*.MRK"), ("All files", "*.*")), "timestamp file"
     )
+
+    # Check we recieved a matching number of files
+    if len(rtklib_files) != len(time_files):
+        raise ValueError(
+                'incorrect number of files given, you must enter matching .pos and timestamp .MRK files')
+    
     print("Select the geoid '.bin' file\n")
     ortho_model = open_file(
         (("geoid files", "*.bin"), ("All files", "*.*")), "geoid file"
     )
 
-    # Setup output file and directory
-    os.chdir(os.path.dirname(rtklib_file))
-    output_file = os.path.basename(rtklib_file)
-    output_file, _ = os.path.splitext(output_file)
-    output_file = output_file + "_cameras" + ".txt"
+    numFiles = len(rtklib_files)
 
-    # Read the files into panda dataframes
-    pos = pd.read_csv(
-        rtklib_file,
-        sep=",",
-        skiprows=1,
-        names=[
-            "week",
-            "GPST",
-            "lat",
-            "lon",
-            "height",
-            "Q",
-            "ns",
-            "sdn",
-            "sde",
-            "sdu",
-            "sdne",
-            "sdeu",
-            "sdun",
-            "age",
-            "ratio",
-        ],
-        header=0,
-        index_col=False,
-    )
-    orient = pd.read_csv(
-        orient_file,
-        sep=",",
-        skiprows=1,
-        usecols=["#Label", "Yaw", "Roll", "Pitch"],
-        header=0,
-        index_col=False,
-    )
-    time = pd.read_csv(
-        time_file,
-        sep="\t",
-        usecols=[0, 1, 3, 4, 5],
-        names=["photoID", "GPST", "leverN", "leverE", "leverD"],
-        index_col=False,
-    )
+    # Make sure filenames are in the right order
+    if numFiles > 1:
+        # process multiple files
+        rtklib_files = sorted(rtklib_files)
+        orient_files = sorted(orient_files)
+        time_files = sorted(time_files)
 
-    # Remove additional characters from lever arm columns
-    time["leverN"] = time["leverN"].map(lambda x: x.rstrip(",N")).astype("int32")
-    time["leverE"] = time["leverE"].map(lambda x: x.rstrip(",E")).astype("int32")
-    time["leverD"] = time["leverD"].map(lambda x: x.rstrip(",V")).astype("int32")
-
-    # print stats of rtklib pos file
-    stats(pos)
+    # Create iterable object of filenames
+    files = zip(rtklib_files, orient_files, time_files)
 
     # Get the output coordinate system
     print(
@@ -203,44 +180,108 @@ if __name__ == "__main__":
         input("Enter a multiplier to scale the standard devation values:\n")
     )
 
-    # convert to numpy arrays
-    lat = pos["lat"].to_numpy()
-    lon = pos["lon"].to_numpy()
-    ellip = pos["height"].to_numpy()
 
-    # Reproject the data
-    pos["X"], pos["Y"], ellip = geodeticToProj(lat, lon, ellip, local_projection)
+    for file in files:
+        rtklib_file, orient_file, time_file  = file
 
-    # Convert ellipsoid height to ortho height
-    pos["Z"] = applyGeoid(lat, lon, ellip, ortho_model)
+        # Setup output file and directory
+        os.chdir(os.path.dirname(rtklib_file))
+        output_file = os.path.basename(rtklib_file)
+        output_file, _ = os.path.splitext(output_file)
+        print(f"\nprocessing file {output_file}")
+        output_file = output_file + "_cameras" + ".txt"
 
-    # Remove excess from Pos dataframe
-    pos = pos[["GPST", "X", "Y", "Z", "sde", "sdn", "sdu"]]
-
-    # merge the image timestamp dataframe with the rotation dataframe
-    if len(time) == len(orient):
-        mrk = orient.join(time).drop(["photoID"], axis=1)
-    else:
-        raise ValueError("Orientation and timestamp file do not match")
-
-    # Interpolate the position of the camera at the image timestamp
-    interpol = interpolatePosition(pos, mrk)
-
-    # Apply lever arm offset to camera coordinates
-    camera_origin = leverArm(interpol)
-
-    # Scale the accuracy values
-    camera_origin["sde"] = camera_origin["sde"] * acc_scale
-    camera_origin["sdn"] = camera_origin["sdn"] * acc_scale
-    camera_origin["sdu"] = camera_origin["sdu"] * acc_scale
-
-    # Clean up and export
-    reorder = ["#Label", "X", "Y", "Z", "Yaw", "Pitch", "Roll", "sde", "sdn", "sdu"]
-    camera_origin = camera_origin[reorder]
-    camera_origin.to_csv(output_file, index=False, float_format="%.5f")
-
-    input(
-        "Success! Output file wrote to {}\n\nPress enter to continue".format(
-            os.getcwd() + "\\" + output_file
+        # Read the files into panda dataframes
+        pos = pd.read_csv(
+            rtklib_file,
+            sep=",",
+            skiprows=1,
+            names=[
+                "week",
+                "GPST",
+                "lat",
+                "lon",
+                "height",
+                "Q",
+                "ns",
+                "sdn",
+                "sde",
+                "sdu",
+                "sdne",
+                "sdeu",
+                "sdun",
+                "age",
+                "ratio",
+            ],
+            header=0,
+            index_col=False,
         )
-    )
+        orient = pd.read_csv(
+            orient_file,
+            sep=",",
+            skiprows=1,
+            usecols=["#Label", "Yaw", "Roll", "Pitch"],
+            header=0,
+            index_col=False,
+        )
+        time = pd.read_csv(
+            time_file,
+            sep="\t",
+            usecols=[0, 1, 3, 4, 5],
+            names=["photoID", "GPST", "leverN", "leverE", "leverD"],
+            index_col=False,
+        )
+
+        # Remove additional characters from lever arm columns
+        time["leverN"] = time["leverN"].map(lambda x: x.rstrip(",N")).astype("int32")
+        time["leverE"] = time["leverE"].map(lambda x: x.rstrip(",E")).astype("int32")
+        time["leverD"] = time["leverD"].map(lambda x: x.rstrip(",V")).astype("int32")
+
+        # print stats of rtklib pos file
+        stats(pos)
+
+        # convert to numpy arrays
+        lat = pos["lat"].to_numpy()
+        lon = pos["lon"].to_numpy()
+        ellip = pos["height"].to_numpy()
+
+        # Reproject the data
+        pos["X"], pos["Y"], ellip = geodeticToProj(lat, lon, ellip, local_projection)
+
+        # Convert ellipsoid height to ortho height, if geoid model given
+        if len(ortho_model) > 0:
+            pos["Z"] = applyGeoid(lat, lon, ellip, ortho_model)
+            print("processing with ortho height")
+        else:
+            pos["Z"] = ellip
+            print("processing with ellipsoid height")
+
+        # Remove excess features from Pos dataframe
+        pos = pos[["GPST", "X", "Y", "Z", "sde", "sdn", "sdu"]]
+
+        # merge the image timestamp dataframe with the rotation dataframe
+        if len(time) == len(orient):
+            mrk = orient.join(time).drop(["photoID"], axis=1)
+        else:
+            raise ValueError("Orientation and timestamp files do not match")
+
+        # Interpolate the position of the camera at the image timestamp
+        interpol = interpolatePosition(pos, mrk)
+
+        # Apply lever arm offset to camera coordinates
+        camera_origin = leverArm(interpol)
+
+        # Scale the accuracy values
+        camera_origin["sde"] = camera_origin["sde"] * acc_scale
+        camera_origin["sdn"] = camera_origin["sdn"] * acc_scale
+        camera_origin["sdu"] = camera_origin["sdu"] * acc_scale
+
+        # Clean up and export
+        reorder = ["#Label", "X", "Y", "Z", "Yaw", "Pitch", "Roll", "sde", "sdn", "sdu"]
+        camera_origin = camera_origin[reorder]
+        camera_origin.to_csv(output_file, index=False, float_format="%.5f")
+
+        output_msg = os.getcwd() + "\\"+ output_file
+        print(f"Success! Output file wrote to {output_msg}\n")
+
+    input("Finished!!!\n\nPress enter to continue")
