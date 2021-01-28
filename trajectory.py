@@ -26,10 +26,10 @@ def stats(df):
     fix_percent = df["Q"].value_counts(sort=True, normalize=True)
     if 1 in fix_percent.index:
         print(
-            "{:.2f}% of measurements had fixed ambiguities\n".format(fix_percent[1] * 100)
+            "{:.2f}% of measurements had fixed ambiguities".format(fix_percent[1] * 100)
         )
     else:
-        print("0% of measurements had fixed ambiguities\n")
+        print("0% of measurements had fixed ambiguities")
 
     print(
         "Average standard deviation estimates of position components are:\n"
@@ -124,12 +124,12 @@ if __name__ == "__main__":
 
     print("Select the rtklib '.pos' file(s)\n")
     rtklib_files = open_files(
-        (("pos files", "*.pos"), ("All files", "*.*")), "rtklib pos file"
+        (("pos files", "*.pos"), ("All files", "*.*")), "rtklib pos files"
     )
     
     print("Select the inclination '.txt' file(s) containing camera rotation values\n")
     orient_files = open_files(
-        (("txt files", "*.txt"), ("All files", "*.*")), "Rotation file"
+        (("txt files", "*.txt"), ("All files", "*.*")), "inclination files"
     )
 
     # Check we recieved a matching number of files
@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     print("Select the image timestamp '.MRK' file(s)\n")
     time_files = open_files(
-        (("MRK files", "*.MRK"), ("All files", "*.*")), "timestamp file"
+        (("MRK files", "*.MRK"), ("All files", "*.*")), "timestamp files"
     )
 
     # Check we recieved a matching number of files
@@ -152,17 +152,17 @@ if __name__ == "__main__":
         (("geoid files", "*.bin"), ("All files", "*.*")), "geoid file"
     )
 
-    numFiles = len(rtklib_files)
+    numFlights = len(rtklib_files)
 
     # Make sure filenames are in the right order
-    if numFiles > 1:
+    if numFlights > 1:
         # process multiple files
         rtklib_files = sorted(rtklib_files)
         orient_files = sorted(orient_files)
         time_files = sorted(time_files)
 
     # Create iterable object of filenames
-    files = zip(rtklib_files, orient_files, time_files)
+    flights = zip(rtklib_files, orient_files, time_files)
 
     # Get the output coordinate system
     print(
@@ -180,15 +180,15 @@ if __name__ == "__main__":
         input("Enter a multiplier to scale the standard devation values:\n")
     )
 
-
-    for file in files:
-        rtklib_file, orient_file, time_file  = file
+    # Iterate through each flight
+    for flight in flights:
+        rtklib_file, orient_file, time_file  = flight
 
         # Setup output file and directory
         os.chdir(os.path.dirname(rtklib_file))
         output_file = os.path.basename(rtklib_file)
         output_file, _ = os.path.splitext(output_file)
-        print(f"\nprocessing file {output_file}")
+        print(f"\nProcessing file: {output_file}")
         output_file = output_file + "_cameras" + ".txt"
 
         # Read the files into panda dataframes
