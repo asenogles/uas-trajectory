@@ -1,6 +1,6 @@
-# UAS Trajectory reconstruction using RTKLIB for Agisoft Metashape
+# UAS Trajectory processing using RTKLIB for Agisoft Metashape
  
- A methodology for processing ppk trajectories using rtklib. Designed around the DJI phantom 4 pro and Agisoft Metashape.
+ A workflow for processing ppk trajectories using rtklib. Designed around the DJI phantom 4 pro and Agisoft Metashape.
 
 ## Workflow
 
