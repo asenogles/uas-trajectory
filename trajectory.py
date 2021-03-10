@@ -35,9 +35,9 @@ def stats(df):
         "Average standard deviation estimates of position components are:\n"
         "Northing: {:.3f}\n"
         "Easting: {:.3f}\n"
-        "Height: {:.3f}\n".format(df["sdn"].mean(), df["sde"].mean(), df["sdu"].mean())
+        "Height: {:.3f}".format(df["sdn"].mean(), df["sde"].mean(), df["sdu"].mean())
     )
-    print("average number of satellites used was: {:.2f}\n".format(df["ns"].mean()))
+    print("average number of satellites used was: {:.2f}".format(df["ns"].mean()))
 
 
 def geodeticToProj(lat, lon, ellip, proj_out, proj_in=6319):
@@ -132,7 +132,7 @@ if __name__ == "__main__":
         (("txt files", "*.txt"), ("All files", "*.*")), "inclination files"
     )
 
-    # Check we recieved a matching number of files
+    # Check we recieved the same number of files
     if len(rtklib_files) != len(orient_files):
         raise ValueError(
                 'incorrect number of files given, you must enter matching .pos and inclination .txt files')
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         (("MRK files", "*.MRK"), ("All files", "*.*")), "timestamp files"
     )
 
-    # Check we recieved a matching number of files
+    # Check we recieved the same number of files
     if len(rtklib_files) != len(time_files):
         raise ValueError(
                 'incorrect number of files given, you must enter matching .pos and timestamp .MRK files')
@@ -238,6 +238,7 @@ if __name__ == "__main__":
         time["leverD"] = time["leverD"].map(lambda x: x.rstrip(",V")).astype("int32")
 
         # print stats of rtklib pos file
+        # TODO: sort pos file based on GPST column
         stats(pos)
 
         # convert to numpy arrays
