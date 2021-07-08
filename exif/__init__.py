@@ -14,14 +14,9 @@ from PIL import Image, ExifTags
 
     From what I can tell, each field is preceeded by 8 hexidecimal values representing  the field as follows:
 
-    0: The tag ID of the field
-    1: empty/space
-    2: Representation of the data type (char, float int etc)
-    3: empty/space
-    4: Number of items in the field
-    5: empty/space
-    6: empty/space
-    7: empty/space
+    0-1: The tag ID of the field
+    2-3: Representation of the data type (char, float int etc)
+    4-7: Number of items in the field
 
     It likely contains 8 fields to ensure memory order - http://www.catb.org/esr/structure-packing/
 
